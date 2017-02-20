@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	mapset "github.com/deckarep/golang-set"
+	"github.com/rhinodavid/bitset"
 )
 
 func Hash(s mapset.Set) string {
@@ -33,10 +34,15 @@ func FilterByCardinality(sets []interface{}, n int) []interface{} {
 	return r
 }
 
-func GenerateCache(subsets []interface{}, n int) map[string]map[int]float32 {
-	r := make(map[string]map[int]float32)
+func GenerateCache(subsets []interface{}, n int) map[bitset.Bitset]map[int]float32 {
+	r := make(map[bitset.Bitset]map[int]float32)
 	for _, sS := range subsets {
-		r[Hash(sS.(mapset.Set))] = make(map[int]float32)
+		interfaceSlice := sS.(mapset.Set).ToSlice()
+		intSlice := make([]int, len(interfaceSlice))
+		for i, v := range interfaceSlice {
+			intSlice[i] = v.(int)
+		}
+		r[bitset.NewFromSlice(intSlice)] = make(map[int]float32)
 
 	}
 	return r

@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	mapset "github.com/deckarep/golang-set"
+	"github.com/rhinodavid/bitset"
 	subset "github.com/rhinodavid/travellingsalesman/set"
 )
 
@@ -56,6 +56,7 @@ func main() {
 		a[i] = &coords{x: float32(x), y: float32(y)}
 		i++
 	}
+	// compute distance matrix for reuse
 	distances := make([][]float32, n)
 	for i := 0; i < n; i++ {
 		distances[i] = make([]float32, n)
@@ -64,57 +65,74 @@ func main() {
 		}
 	}
 	log.Printf("Finsihed generating distances\n")
+
+	// generate all subset combinations
 	subsets := subset.GenerateSubsets(n)
 	log.Printf("Finished generating subsets\n")
+
+	//build first cache
 	oldCache := subset.GenerateCache(subset.FilterByCardinality(subsets, 0), n)
-	// initialize empty set
+	// initialize first cache
 	for i := 1; i < n; i++ {
 		dist := distances[0][i]
-		oldCache[subset.Hash(subsets[0].(mapset.Set))][i] = dist
+		for key := range oldCache {
+			// only 1 key
+			oldCache[key][i] = dist
+		}
 	}
+
+	// iterate over lengths of subsets m
 	for m := 1; m < n-1; m++ {
 		fmt.Printf("\n\nInitiating subsets of size %d\n", m)
 		cardinalSets := subset.FilterByCardinality(subsets, m)
 		newCache := subset.GenerateCache(cardinalSets, n)
 		lenSets := len(cardinalSets)
-		for i, ss := range cardinalSets {
-			fmt.Printf("\rProcessing subset %d of %d", i+1, lenSets)
+		i := 1
+		for ss := range newCache {
+			fmt.Printf("\rProcessing subset %d of %d", i, lenSets)
+			i++
 			// iterate over each item in the subset
-			for k := range ss.(mapset.Set).Iter() {
+			for _, k := range ss.ToSlice() {
 				for j := 1; j < n; j++ {
-					if ss.(mapset.Set).Contains(j) {
+					if ss.Contains(j) {
 						continue
 					} else {
-						if _, ok := newCache[subset.Hash(ss.(mapset.Set))][j]; !ok {
-							newCache[subset.Hash(ss.(mapset.Set))][j] = maxFloat
+						if _, ok := newCache[ss][j]; !ok {
+							newCache[ss][j] = maxFloat
 						}
 					}
-					kj := distances[k.(int)][j]
-					sPrime := ss.(mapset.Set).Clone()
-					sPrime.Remove(k)
-					cv, ok := oldCache[subset.Hash(sPrime)]
+					kj := distances[k][j]
+					sPrime := ss.RemoveMember(k)
+					cv, ok := oldCache[sPrime]
 					if !ok {
-						log.Fatalf("Error looking up set %s in cache", subset.Hash(sPrime))
+						log.Fatalf("Error looking up set %v in cache", sPrime)
 					}
 					sk := cv[j]
-					if sk+kj < newCache[subset.Hash(ss.(mapset.Set))][j] {
-						newCache[subset.Hash(ss.(mapset.Set))][j] = sk + kj
+					if sk+kj < newCache[ss][j] {
+						newCache[ss][j] = sk + kj
 					}
 				}
 			}
 		}
 		oldCache = newCache
 	}
+	// compute final subset
+	intSlice := make([]int, n-1)
+	for i := 0; i < n-1; i++ {
+		intSlice[i] = i + 1
+	}
+	finalSS := bitset.NewFromSlice(intSlice)
+	// compute result from last cache
 	result := maxFloat
-	for k := range subsets[len(subsets)-1].(mapset.Set).Iter() {
-		kj := distances[k.(int)][0]
-		sPrime := subsets[len(subsets)-1].(mapset.Set).Clone()
-		sPrime.Remove(k)
-		cv, ok := oldCache[subset.Hash(sPrime)]
+
+	for _, k := range finalSS.ToSlice() {
+		kj := distances[k][0]
+		sPrime := finalSS.RemoveMember(k)
+		cv, ok := oldCache[sPrime]
 		if !ok {
-			log.Fatalf("Error looking up set %s in cache", sPrime)
+			log.Fatalf("Error looking up set %v in cache", sPrime)
 		}
-		sk := cv[k.(int)]
+		sk := cv[k]
 		if sk+kj < result {
 			result = sk + kj
 		}
