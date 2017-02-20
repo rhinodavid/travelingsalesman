@@ -82,8 +82,12 @@ func main() {
 			// iterate over each item in the subset
 			for k := range ss.(mapset.Set).Iter() {
 				for j := 1; j < n; j++ {
-					if k.(int) == j {
+					if ss.(mapset.Set).Contains(j) {
 						continue
+					} else {
+						if _, ok := newCache[subset.Hash(ss.(mapset.Set))][j]; !ok {
+							newCache[subset.Hash(ss.(mapset.Set))][j] = maxFloat
+						}
 					}
 					kj := distances[k.(int)][j]
 					sPrime := ss.(mapset.Set).Clone()
@@ -101,7 +105,6 @@ func main() {
 		}
 		oldCache = newCache
 	}
-
 	result := maxFloat
 	for k := range subsets[len(subsets)-1].(mapset.Set).Iter() {
 		kj := distances[k.(int)][0]
