@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"sort"
 
-	"math"
-
 	mapset "github.com/deckarep/golang-set"
 )
 
@@ -35,13 +33,10 @@ func FilterByCardinality(sets []interface{}, n int) []interface{} {
 	return r
 }
 
-func GenerateCache(subsets []interface{}, n int) map[string][]float32 {
-	r := make(map[string][]float32)
+func GenerateCache(subsets []interface{}, n int) map[string]map[int]float32 {
+	r := make(map[string]map[int]float32)
 	for _, sS := range subsets {
-		r[Hash(sS.(mapset.Set))] = make([]float32, n)
-		for i := range r[Hash(sS.(mapset.Set))] {
-			r[Hash(sS.(mapset.Set))][i] = math.MaxFloat32
-		}
+		r[Hash(sS.(mapset.Set))] = make(map[int]float32)
 	}
 	return r
 }

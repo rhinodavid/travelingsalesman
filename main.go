@@ -27,6 +27,39 @@ func cartesianDist(a, b *coords) float32 {
 	return float32(math.Sqrt(float64((a.y-b.y)*(a.y-b.y) + (a.x-b.x)*(a.x-b.x))))
 }
 
+type job struct {
+	subset mapset.Set
+	cache  map[int]float32
+}
+
+func worker(jobs <-chan mapset.Set, result chan<- *job, n int, oldCache map[string]map[int]float32, distances [][]float32) {
+	newCache := make(map[int]float32)
+	for ss := range jobs {
+		// ss is a subset
+		for k := range ss.(mapset.Set).Iter() {
+			for j := 1; j < n; j++ {
+				if k.(int) == j {
+					continue
+				} else {
+					newCache[j] = maxFloat
+				}
+				kj := distances[k.(int)][j]
+				sPrime := ss.(mapset.Set).Clone()
+				sPrime.Remove(k)
+				cv, ok := oldCache[subset.Hash(sPrime)]
+				if !ok {
+					log.Fatalf("Error looking up set %s in cache", subset.Hash(sPrime))
+				}
+				sk := cv[j]
+				if sk+kj < newCache[j] {
+					newCache[j] = sk + kj
+				}
+			}
+		}
+		result <- &job{subset: ss, cache: newCache}
+	}
+}
+
 func main() {
 	flag.Parse()
 	f, err := os.Open(*input)
@@ -67,6 +100,7 @@ func main() {
 	subsets := subset.GenerateSubsets(n)
 	log.Printf("Finished generating subsets\n")
 	oldCache := subset.GenerateCache(subset.FilterByCardinality(subsets, 0), n)
+
 	// initialize empty set
 	for i := 1; i < n; i++ {
 		dist := distances[0][i]
@@ -77,28 +111,25 @@ func main() {
 		cardinalSets := subset.FilterByCardinality(subsets, m)
 		newCache := subset.GenerateCache(cardinalSets, n)
 		lenSets := len(cardinalSets)
-		for i, ss := range cardinalSets {
-			fmt.Printf("\rProcessing subset %d of %d", i+1, lenSets)
-			// iterate over each item in the subset
-			for k := range ss.(mapset.Set).Iter() {
-				for j := 1; j < n; j++ {
-					if k.(int) == j {
-						continue
-					}
-					kj := distances[k.(int)][j]
-					sPrime := ss.(mapset.Set).Clone()
-					sPrime.Remove(k)
-					cv, ok := oldCache[subset.Hash(sPrime)]
-					if !ok {
-						log.Fatalf("Error looking up set %s in cache", subset.Hash(sPrime))
-					}
-					sk := cv[j]
-					if sk+kj < newCache[subset.Hash(ss.(mapset.Set))][j] {
-						newCache[subset.Hash(ss.(mapset.Set))][j] = sk + kj
-					}
-				}
-			}
+
+		jobs := make(chan mapset.Set, 10000)
+		jobsResults := make(chan *job, 10000)
+		for w := 1; w < 4; w++ {
+			go worker(jobs, jobsResults, n, oldCache, distances)
 		}
+
+		for i, ss := range cardinalSets {
+			fmt.Printf("\rSending subset %d of %d", i+1, lenSets)
+			jobs <- ss.(mapset.Set)
+		}
+		close(jobs)
+		fmt.Printf("\n")
+		for res := 0; res < lenSets; res++ {
+			fmt.Printf("\rRecieving subset result %d of %d", res+1, lenSets)
+			jobResult := <-jobsResults
+			newCache[subset.Hash(jobResult.subset)] = jobResult.cache
+		}
+		close(jobsResults)
 		oldCache = newCache
 	}
 
