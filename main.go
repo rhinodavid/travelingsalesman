@@ -128,7 +128,7 @@ func main() {
 	}
 
 	// compute final subset
-	fmt.Println()
+	fmt.Printf("\r")
 	log.Printf("Computing final result from last cache\n")
 	intSlice := make([]int, n-1)
 	for i := 0; i < n-1; i++ {
